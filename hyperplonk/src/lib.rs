@@ -11,7 +11,7 @@ use errors::HyperPlonkErrors;
 use subroutines::{pcs::prelude::PolynomialCommitmentScheme, poly_iop::prelude::PermutationCheck};
 use witness::WitnessColumn;
 
-mod custom_gate;
+pub mod custom_gate;
 mod errors;
 mod mock;
 pub mod prelude;

@@ -4,5 +4,7 @@ members = [
   "hyperplonk",
   "subroutines",
   "transcript",
-  "util"
+  "util",
+  "distributed",
+  "distributed_derive"
 ]

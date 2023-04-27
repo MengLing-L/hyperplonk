@@ -19,7 +19,7 @@ use tokio::{
 };
 
 use crate::{
-    config::{DATA_DIR, IP_NAME_MAP, NUM_WIRE_TYPES, WORKERS},
+    config::{CIRCUIT_CONFIG, DATA_DIR, IP_NAME_MAP, NUM_WIRE_TYPES, WORKERS},
     // gpu::Domain,
     polynomial::VecPolynomial,
     storage::SliceStorage,
@@ -27,23 +27,27 @@ use crate::{
     utils::CastSlice,
 };
 
+mod keygen;
 mod utils;
-
-enum Selectors {
-    Type1 { a: SliceStorage, h: SliceStorage },
-    Type2 { a: SliceStorage, h: SliceStorage, m: SliceStorage },
-    Type3 { o: SliceStorage, c: SliceStorage, e: SliceStorage },
-}
 
 pub struct PlonkImplInner {
     me: usize,
     data_path: PathBuf,
+
+    ck: SliceStorage,
+    w_0: SliceStorage,
+    w_1: SliceStorage,
+    w_2: SliceStorage,
+    w_3: SliceStorage,
+    w_4: SliceStorage,
 }
 
 #[repr(u8)]
 #[derive(Clone, Copy, strum::Display, TryFromPrimitive, IntoPrimitive)]
 pub enum Method {
-    Holleworld = 0x00,
+    KeyGenPrepare = 0x00,
+    KeyGenSetCk = 0x01,
+    KeyGenCommit = 0x02,
 }
 
 #[repr(u8)]
@@ -63,7 +67,16 @@ impl PlonkImplInner {
 
         create_dir_all(&data_path).unwrap();
 
-        Self { me, data_path }
+        Self {
+            me,
+            ck: SliceStorage::new(data_path.join("srs.ck.bin")),
+            w_0: SliceStorage::new(data_path.join("circuit.w_0.bin")),
+            w_1: SliceStorage::new(data_path.join("circuit.w_1.bin")),
+            w_2: SliceStorage::new(data_path.join("circuit.w_2.bin")),
+            w_3: SliceStorage::new(data_path.join("circuit.w_3.bin")),
+            w_4: SliceStorage::new(data_path.join("circuit.w_4.bin")),
+            data_path,
+        }
     }
 }
 
@@ -75,16 +88,84 @@ impl PlonkImplInner {
         res: BufWriter<W>,
     ) -> io::Result<()> {
         match method {
-            Method::Holleworld => self.holleworld(req, res).await,
+            Method::KeyGenPrepare => self.keygen_prepare(req, res).await,
+            Method::KeyGenSetCk => self.keygen_set_ck(req, res).await,
+            Method::KeyGenCommit => self.keygen_commit(req, res).await,
         }
     }
 
-    async fn holleworld<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
+    async fn keygen_prepare<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
         &self,
         _: BufReader<R>,
         mut res: BufWriter<W>,
     ) -> io::Result<()> {
+        self.ck.create()?;
         res.write_u8(Status::Ok as u8).await?;
+        res.flush().await?;
+
+        Ok(())
+    }
+
+    async fn keygen_set_ck<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
+        &self,
+        mut req: BufReader<R>,
+        mut res: BufWriter<W>,
+    ) -> io::Result<()> {
+        let hash = req.read_u64_le().await?;
+        let length = req.read_u64_le().await?;
+        let mut ck_buf = vec![0u8; length as usize];
+        req.read_exact(&mut ck_buf).await?;
+
+        if xxhash_rust::xxh3::xxh3_64(&ck_buf) != hash {
+            res.write_u8(Status::HashMismatch as u8).await?;
+        } else {
+            self.ck.append(&ck_buf)?;
+            res.write_u8(Status::Ok as u8).await?;
+        }
+        res.flush().await?;
+
+        Ok(())
+    }
+
+    async fn keygen_commit<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
+        &self,
+        mut req: BufReader<R>,
+        mut res: BufWriter<W>,
+    ) -> io::Result<()> {
+        let mut seed = [0u8; 32];
+        req.read_exact(&mut seed).await?;
+
+        let circuit = self.init_circuit(seed);
+
+        self.store_w_evals(&circuit.witnesses);
+
+        // let circuit = MockCircuit::<Fr>::new(1 << CIRCUIT_CONFIG.custom_degree, &jf_gate);
+        // assert!(circuit.is_satisfied());
+
+        // let PlonkCircuit {
+        //     num_vars,
+        //     gates,
+        //     wire_variables,
+        //     pub_input_gate_ids,
+        //     witness,
+        //     eval_domain,
+        //     ..
+        // } = self.init_circuit(seed);
+        // self.init_domains(eval_domain.size());
+        // self.init_k(NUM_WIRE_TYPES);
+        // if self.me == 4 {
+        //     self.store_public_inputs(
+        //         pub_input_gate_ids
+        //             .into_par_iter()
+        //             .map(|gate_id| witness[wire_variables[NUM_WIRE_TYPES - 1][gate_id]])
+        //             .collect(),
+        //     );
+        // }
+        // self.store_w_evals(&wire_variables[self.me], witness);
+
+        res.write_u8(Status::Ok as u8).await?;
+        //res.write_all([self.init_and_commit_sigma(wire_variables, num_vars)].cast()).await?;
+        //res.write_all(self.init_and_commit_selectors(gates).cast()).await?;
         res.flush().await?;
 
         Ok(())

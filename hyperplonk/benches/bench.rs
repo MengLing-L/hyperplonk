@@ -21,12 +21,12 @@ use subroutines::{
     poly_iop::PolyIOP,
 };
 
-const SUPPORTED_SIZE: usize = 20;
+const SUPPORTED_SIZE: usize = 10;
 const MIN_NUM_VARS: usize = 8;
 const MAX_NUM_VARS: usize = 20;
 const MIN_CUSTOM_DEGREE: usize = 1;
 const MAX_CUSTOM_DEGREE: usize = 32;
-const HIGH_DEGREE_TEST_NV: usize = 15;
+const HIGH_DEGREE_TEST_NV: usize = 10;
 
 fn main() -> Result<(), HyperPlonkErrors> {
     let thread = rayon::current_num_threads();
@@ -44,14 +44,14 @@ fn main() -> Result<(), HyperPlonkErrors> {
         }
     };
     bench_jellyfish_plonk(&pcs_srs, thread)?;
-    println!();
-    bench_vanilla_plonk(&pcs_srs, thread)?;
-    println!();
-    for degree in MIN_CUSTOM_DEGREE..=MAX_CUSTOM_DEGREE {
-        bench_high_degree_plonk(&pcs_srs, degree, thread)?;
-        println!();
-    }
-    println!();
+    // println!();
+    // bench_vanilla_plonk(&pcs_srs, thread)?;
+    // println!();
+    // for degree in MIN_CUSTOM_DEGREE..=MAX_CUSTOM_DEGREE {
+    //     bench_high_degree_plonk(&pcs_srs, degree, thread)?;
+    //     println!();
+    // }
+    // println!();
 
     Ok(())
 }
@@ -86,10 +86,10 @@ fn bench_jellyfish_plonk(
 ) -> Result<(), HyperPlonkErrors> {
     let filename = format!("jellyfish threads {}.txt", thread);
     let mut file = File::create(filename).unwrap();
-    for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
-        let jf_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
-        bench_mock_circuit_zkp_helper(&mut file, nv, &jf_gate, pcs_srs)?;
-    }
+    // for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
+    let jf_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
+    bench_mock_circuit_zkp_helper(&mut file, HIGH_DEGREE_TEST_NV, &jf_gate, pcs_srs)?;
+    // }
 
     Ok(())
 }
@@ -129,39 +129,39 @@ fn bench_mock_circuit_zkp_helper(
     //==========================================================
     // generate pk and vks
     let start = Instant::now();
-    for _ in 0..repetition {
-        let (_pk, _vk) = <PolyIOP<Fr> as HyperPlonkSNARK<
-            Bls12_381,
-            MultilinearKzgPCS<Bls12_381>,
-        >>::preprocess(&index, pcs_srs)?;
-    }
-    println!(
-        "key extraction for {} variables: {} us",
-        nv,
-        start.elapsed().as_micros() / repetition as u128
-    );
+    // for _ in 0..repetition {
+    //     let (_pk, _vk) = <PolyIOP<Fr> as HyperPlonkSNARK<
+    //         Bls12_381,
+    //         MultilinearKzgPCS<Bls12_381>,
+    //     >>::preprocess(&index, pcs_srs)?;
+    // }
+    // println!(
+    //     "key extraction for {} variables: {} us",
+    //     nv,
+    //     start.elapsed().as_micros() / repetition as u128
+    // );
     let (pk, vk) =
         <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::preprocess(
             &index, pcs_srs,
         )?;
     //==========================================================
     // generate a proof
-    let start = Instant::now();
-    for _ in 0..repetition {
-        let _proof =
-            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
-                &pk,
-                &circuit.public_inputs,
-                &circuit.witnesses,
-            )?;
-    }
-    let t = start.elapsed().as_micros() / repetition as u128;
-    println!(
-        "proving for {} variables: {} us",
-        nv,
-        start.elapsed().as_micros() / repetition as u128
-    );
-    file.write_all(format!("{} {}\n", nv, t).as_ref()).unwrap();
+    // let start = Instant::now();
+    // for _ in 0..repetition {
+    //     let _proof =
+    //         <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381,
+    // MultilinearKzgPCS<Bls12_381>>>::prove(             &pk,
+    //             &circuit.public_inputs,
+    //             &circuit.witnesses,
+    //         )?;
+    // }
+    // let t = start.elapsed().as_micros() / repetition as u128;
+    // println!(
+    //     "proving for {} variables: {} us",
+    //     nv,
+    //     start.elapsed().as_micros() / repetition as u128
+    // );
+    // file.write_all(format!("{} {}\n", nv, t).as_ref()).unwrap();
 
     let proof = <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
         &pk,

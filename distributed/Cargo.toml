@@ -1,5 +1,5 @@
 [package]
-name = "hp-distributed"
+name = "hp_distributed"
 version = "0.0.0"
 edition = "2018"
 
@@ -17,12 +17,12 @@ futures = "0.3.0"
 tokio = { version = "1.0.0", features = ["full"] }
 rand = "^0"
 rand_chacha = { version = "0.3.1" }
-ark-std = { version = "0.3.0", features = ["parallel"] }
-ark-serialize = { version = "0.3.0" }
-ark-ff = { version = "0.3.0", features = ["asm", "parallel"] }
-ark-ec = { version = "0.3.0", features = ["parallel"] }
-ark-poly = { version = "0.3.0", features = ["parallel"] }
-ark-bls12-381 = { version = "0.3.0", features = ["curve"] }
+ark-std = { version = "0.4.0", features = ["parallel"] }
+ark-serialize = { version = "^0.4.0" }
+ark-ff = { version = "0.4.0", features = ["asm", "parallel"] }
+ark-ec = { version = "0.4.0", features = ["parallel"] }
+ark-poly = { version = "0.4.0", features = ["parallel"] }
+ark-bls12-381 = { version = "0.4.0", features = ["curve"] }
 ark-poly-commit = { git = "https://github.com/arkworks-rs/poly-commit/", rev = "cafc05e39692bbc5c383990063ad851f0b94a553", features = ["parallel"] }
 merlin = "3.0.0"
 serde = {version ="1.0.145", features = ["derive"]}
@@ -37,6 +37,10 @@ tracing-subscriber = "0.3.16"
 stubborn-io = "0.3"
 strum = { version = "0.24", features = ["derive"] }
 num_enum = "0.6.1"
+subroutines = { path = "../subroutines" }
+hyperplonk = {path="../hyperplonk"}
+arithmetic = { path = "../arithmetic" }
+displaydoc = { version = "0.2.3", default-features = false }
 
 [features]
 default = ["trace"]

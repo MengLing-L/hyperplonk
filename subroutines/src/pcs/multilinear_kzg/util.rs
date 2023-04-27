@@ -14,7 +14,7 @@ use crate::PCSError;
 /// Generate eq(t,x), a product of multilinear polynomials with fixed t.
 /// eq(a,b) is takes extensions of a,b in {0,1}^num_vars such that if a and b in
 /// {0,1}^num_vars are equal then this polynomial evaluates to 1.
-pub(crate) fn eq_extension<F: PrimeField>(t: &[F]) -> Vec<DenseMultilinearExtension<F>> {
+pub fn eq_extension<F: PrimeField>(t: &[F]) -> Vec<DenseMultilinearExtension<F>> {
     let start = start_timer!(|| "eq extension");
 
     let dim = t.len();
@@ -34,7 +34,7 @@ pub(crate) fn eq_extension<F: PrimeField>(t: &[F]) -> Vec<DenseMultilinearExtens
 }
 
 /// Evaluate eq polynomial. use the public one later
-pub(crate) fn eq_eval<F: PrimeField>(x: &[F], y: &[F]) -> Result<F, PCSError> {
+pub fn eq_eval<F: PrimeField>(x: &[F], y: &[F]) -> Result<F, PCSError> {
     if x.len() != y.len() {
         return Err(PCSError::InvalidParameters(
             "x and y have different length".to_string(),

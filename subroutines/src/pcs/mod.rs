@@ -4,11 +4,12 @@
 // You should have received a copy of the MIT License
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
-mod errors;
-mod multilinear_kzg;
+pub mod errors;
+
 mod structs;
 mod univariate_kzg;
 
+pub mod multilinear_kzg;
 pub mod prelude;
 
 use ark_ec::pairing::Pairing;

@@ -137,7 +137,9 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                                 *eval = table[b << 1];
                                 *step = table[(b << 1) + 1] - table[b << 1];
                             });
+                        // evaluate ...0
                         acc[0] += buf.iter().map(|(eval, _)| eval).product::<F>();
+                        // evaluate ...1, ...11, ...111
                         acc[1..].iter_mut().for_each(|acc| {
                             buf.iter_mut().for_each(|(eval, step)| *eval += step as &_);
                             *acc += buf.iter().map(|(eval, _)| eval).product::<F>();
@@ -146,27 +148,52 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                     },
                 )
                 .map(|(_, partial)| partial)
-                .reduce(
-                    || vec![F::zero(); products.len() + 1],
-                    |mut sum, partial| {
-                        sum.iter_mut()
-                            .zip(partial.iter())
-                            .for_each(|(sum, partial)| *sum += partial);
-                        sum
-                    },
-                );
-            sum.iter_mut().for_each(|sum| *sum *= coefficient);
+                .collect::<Vec<Vec<F>>>();
+            let mut temp = sum
+                .into_iter()
+                .reduce(|mut sum, partial| {
+                    sum.iter_mut()
+                        .zip(partial.iter())
+                        .for_each(|(sum, partial)| *sum += partial);
+                    sum
+                })
+                .unwrap();
+            temp.iter_mut().for_each(|sum| *sum *= coefficient);
             let extraploation = cfg_into_iter!(0..self.poly.aux_info.max_degree - products.len())
                 .map(|i| {
                     let (points, weights) = &self.extrapolation_aux[products.len() - 1];
                     let at = F::from((products.len() + 1 + i) as u64);
-                    extrapolate(points, weights, &sum, &at)
+                    extrapolate(points, weights, &temp, &at)
                 })
                 .collect::<Vec<_>>();
             products_sum
                 .iter_mut()
-                .zip(sum.iter().chain(extraploation.iter()))
+                .zip(temp.iter().chain(extraploation.iter()))
                 .for_each(|(products_sum, sum)| *products_sum += sum);
+            //     .map(|(_, partial)| partial)
+            //     .reduce(
+            //         || vec![F::zero(); products.len() + 1],
+            //         |mut sum, partial| {
+            //             sum.iter_mut()
+            //                 .zip(partial.iter())
+            //                 .for_each(|(sum, partial)| *sum += partial);
+            //             sum
+            //         },
+            //     );
+            // sum.iter_mut().for_each(|sum| *sum *= coefficient);
+            // let extraploation =
+            // cfg_into_iter!(0..self.poly.aux_info.max_degree - products.len())
+            //     .map(|i| {
+            //         let (points, weights) =
+            // &self.extrapolation_aux[products.len() - 1];
+            //         let at = F::from((products.len() + 1 + i) as u64);
+            //         extrapolate(points, weights, &sum, &at)
+            //     })
+            //     .collect::<Vec<_>>();
+            // products_sum
+            //     .iter_mut()
+            //     .zip(sum.iter().chain(extraploation.iter()))
+            //     .for_each(|(products_sum, sum)| *products_sum += sum);
         });
 
         // update prover's state to the partial evaluated polynomial

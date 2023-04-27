@@ -7,7 +7,8 @@ pub mod config;
 // pub mod circuit;
 pub mod polynomial;
 
-pub mod worker;
-// pub mod dispatcher;
+pub mod dispatcher;
 pub mod mmap;
+pub mod mock;
 pub mod storage;
+pub mod worker;

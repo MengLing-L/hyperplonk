@@ -5,6 +5,11 @@
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
 pub use crate::{
-    custom_gate::CustomizedGates, errors::HyperPlonkErrors, mock::MockCircuit,
-    selectors::SelectorColumn, witness::WitnessColumn, HyperPlonkSNARK,
+    custom_gate::CustomizedGates,
+    errors::HyperPlonkErrors,
+    mock::MockCircuit,
+    selectors::SelectorColumn,
+    structs::{HyperPlonkIndex, HyperPlonkParams},
+    witness::WitnessColumn,
+    HyperPlonkSNARK,
 };

@@ -221,7 +221,7 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
 }
 
 /// fix first `pad` variables of `poly` represented in evaluation form to zero
-fn remove_dummy_variable<F: Field>(poly: &[F], pad: usize) -> Result<Vec<F>, PCSError> {
+pub fn remove_dummy_variable<F: Field>(poly: &[F], pad: usize) -> Result<Vec<F>, PCSError> {
     if pad == 0 {
         return Ok(poly.to_vec());
     }

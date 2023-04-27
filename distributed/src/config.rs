@@ -24,8 +24,7 @@ pub struct GpuConfig {
 
 #[derive(Clone, Deserialize)]
 pub struct CircuitConfig {
-    pub tree_height: u8,
-    pub num_membership_proofs: usize,
+    pub custom_degree: usize,
 }
 
 pub static DATA_DIR: Lazy<PathBuf> =

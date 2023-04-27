@@ -630,7 +630,7 @@ mod tests {
     };
     use arithmetic::{identity_permutation, random_permutation};
     use ark_bls12_381::Bls12_381;
-    use ark_std::test_rng;
+    use ark_std::{add_to_trace, test_rng};
     use subroutines::pcs::prelude::MultilinearKzgPCS;
 
     #[test]

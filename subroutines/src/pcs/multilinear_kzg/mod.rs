@@ -7,8 +7,8 @@
 //! Main module for multilinear KZG commitment scheme
 
 pub(crate) mod batching;
-pub(crate) mod srs;
-pub(crate) mod util;
+pub mod srs;
+pub mod util;
 
 use crate::{
     pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme, StructuredReferenceString},
