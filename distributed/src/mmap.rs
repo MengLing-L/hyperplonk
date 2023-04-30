@@ -3,7 +3,7 @@ use std::{
     io,
     mem::size_of,
     ops::{Deref, DerefMut},
-    os::fd::AsRawFd,
+    os::{unix::prelude::AsRawFd},
     ptr,
     slice::{from_raw_parts, from_raw_parts_mut},
     sync::atomic::{AtomicUsize, Ordering},

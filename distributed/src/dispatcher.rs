@@ -17,15 +17,15 @@ use fn_timer::fn_timer;
 use futures::future::join_all;
 use hyperplonk::prelude::HyperPlonkErrors;
 use stubborn_io::StubbornTcpStream;
-use subroutines::pcs::multilinear_kzg::{
+use subroutines::{pcs::multilinear_kzg::{
     srs::{self, Evaluations, MultilinearProverParam, MultilinearUniversalParams},
     util,
-};
+}, Commitment};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::{
     utils::CastSlice,
-    worker::{Method, Status},
+    worker::{Method, Status}, config::{CIRCUIT_CONFIG},
 };
 
 pub struct HyperPlonk {}
@@ -148,17 +148,36 @@ impl HyperPlonk {
             .await;
         }
 
-        join_all(workers.iter_mut().enumerate().map(|(i, worker)| async move {
+        let c = join_all(workers.iter_mut().enumerate().map(|(i, worker)| async move {
             worker.write_u8(Method::KeyGenCommit as u8).await.unwrap();
             worker.write_all(&seed).await.unwrap();
             worker.flush().await.unwrap();
 
             match worker.read_u8().await.unwrap().try_into().unwrap() {
-                Status::Ok => {},
+                Status::Ok => {
+                    let mut c_q =vec![G1Projective::zero(); CIRCUIT_CONFIG.selectors[i].len()];
+                    worker.read_exact(c_q.cast_mut()).await.unwrap();
+                    let mut c_p =vec![G1Projective::zero(); CIRCUIT_CONFIG.permu[i].len()];
+                    worker.read_exact(c_p.cast_mut()).await.unwrap();
+                    (c_q,c_p)
+                }
                 _ => panic!(),
             }
         }))
         .await;
+        let selector_comms: Vec<Commitment<Bls12_381>> = vec![
+            c[0].0[0], c[0].0[1], c[1].0[0], c[1].0[1], c[0].0[2], c[1].0[2], c[0].0[3], c[0].0[4],
+            c[1].0[3], c[1].0[4], c[0].0[5], c[1].0[5],
+        ]
+        .into_iter()
+        .map(|c| Commitment(c.into_affine()))
+        .collect();
+        let permutation_comms: Vec<Commitment<Bls12_381>> = vec![
+            c[0].1[0], c[0].1[1], c[0].1[2], c[1].1[0], c[1].1[1],
+        ]
+        .into_iter()
+        .map(|c| Commitment(c.into_affine()))
+        .collect();
         Ok(())
     }
 }

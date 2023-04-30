@@ -40,6 +40,19 @@ pub struct PlonkImplInner {
     w_2: SliceStorage,
     w_3: SliceStorage,
     w_4: SliceStorage,
+
+    q_0: SliceStorage,
+    q_1: SliceStorage,
+    q_2: SliceStorage,
+    q_3: SliceStorage,
+    q_4: SliceStorage,
+    q_5: SliceStorage,
+
+    p_0: SliceStorage,
+    p_1: SliceStorage,
+    p_2: SliceStorage,
+    p_3: SliceStorage,
+    p_4: SliceStorage,
 }
 
 #[repr(u8)]
@@ -75,6 +88,17 @@ impl PlonkImplInner {
             w_2: SliceStorage::new(data_path.join("circuit.w_2.bin")),
             w_3: SliceStorage::new(data_path.join("circuit.w_3.bin")),
             w_4: SliceStorage::new(data_path.join("circuit.w_4.bin")),
+            q_0: SliceStorage::new(data_path.join("circuit.q_0.bin")),
+            q_1: SliceStorage::new(data_path.join("circuit.q_1.bin")),
+            q_2: SliceStorage::new(data_path.join("circuit.q_2.bin")),
+            q_3: SliceStorage::new(data_path.join("circuit.q_3.bin")),
+            q_4: SliceStorage::new(data_path.join("circuit.q_4.bin")),
+            q_5: SliceStorage::new(data_path.join("circuit.q_5.bin")),
+            p_0: SliceStorage::new(data_path.join("circuit.p_0.bin")),
+            p_1: SliceStorage::new(data_path.join("circuit.p_1.bin")),
+            p_2: SliceStorage::new(data_path.join("circuit.p_2.bin")),
+            p_3: SliceStorage::new(data_path.join("circuit.p_3.bin")),
+            p_4: SliceStorage::new(data_path.join("circuit.p_4.bin")),
             data_path,
         }
     }
@@ -137,35 +161,11 @@ impl PlonkImplInner {
 
         let circuit = self.init_circuit(seed);
 
-        self.store_w_evals(&circuit.witnesses);
-
-        // let circuit = MockCircuit::<Fr>::new(1 << CIRCUIT_CONFIG.custom_degree, &jf_gate);
-        // assert!(circuit.is_satisfied());
-
-        // let PlonkCircuit {
-        //     num_vars,
-        //     gates,
-        //     wire_variables,
-        //     pub_input_gate_ids,
-        //     witness,
-        //     eval_domain,
-        //     ..
-        // } = self.init_circuit(seed);
-        // self.init_domains(eval_domain.size());
-        // self.init_k(NUM_WIRE_TYPES);
-        // if self.me == 4 {
-        //     self.store_public_inputs(
-        //         pub_input_gate_ids
-        //             .into_par_iter()
-        //             .map(|gate_id| witness[wire_variables[NUM_WIRE_TYPES - 1][gate_id]])
-        //             .collect(),
-        //     );
-        // }
-        // self.store_w_evals(&wire_variables[self.me], witness);
+        self.store_w_evals(circuit.witnesses);
 
         res.write_u8(Status::Ok as u8).await?;
-        //res.write_all([self.init_and_commit_sigma(wire_variables, num_vars)].cast()).await?;
-        //res.write_all(self.init_and_commit_selectors(gates).cast()).await?;
+        res.write_all(self.init_and_commit_selectors(circuit.index.selectors).cast()).await?;
+        res.write_all([self.init_and_commit_permu(circuit.index.permutation)].cast()).await?;
         res.flush().await?;
 
         Ok(())

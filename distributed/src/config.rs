@@ -11,6 +11,7 @@ use serde::Deserialize;
 
 pub const NUM_WIRE_TYPES: usize = 5;
 
+
 #[derive(Clone, Deserialize)]
 pub struct NetworkConfig {
     pub workers: Vec<SocketAddr>,
@@ -25,6 +26,8 @@ pub struct GpuConfig {
 #[derive(Clone, Deserialize)]
 pub struct CircuitConfig {
     pub custom_degree: usize,
+    pub selectors: Vec<Vec<usize>>,
+    pub permu: Vec<Vec<usize>>,
 }
 
 pub static DATA_DIR: Lazy<PathBuf> =

@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use ark_bls12_381::{Fr, G1Projective};
+use ark_ec::VariableBaseMSM;
 use fn_timer::fn_timer;
 use futures::future::join_all;
 use stubborn_io::StubbornTcpStream;
@@ -42,10 +43,17 @@ impl PlonkImplInner {
     }
 }
 
-// impl PlonkImplInner {
-//     #[fn_timer]
-//     #[inline]
-//     pub fn commit_polynomial(&self, poly: &[Fr]) -> G1Projective {
-//         self.ck.mmap().unwrap().var_msm(poly)
-//     }
-// }
+impl PlonkImplInner {
+    #[fn_timer]
+    #[inline]
+    pub fn commit_polynomial(&self, poly: &[Fr]) -> G1Projective {
+        let commit_timer = start_timer!(|| "commit");
+        
+        let scalars: Vec<_> = poly.to_vec();
+        let base = self.ck.mmap().unwrap();
+        let commitment = G1Projective::msm_unchecked(&base, scalars.as_slice());
+
+        end_timer!(commit_timer);
+        commitment
+    }
+}

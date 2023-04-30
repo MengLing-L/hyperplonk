@@ -1,7 +1,8 @@
 # The socket addresses that the workers listen on.
 # They are read by the dispatcher and the workers in order to connect to each other.
 workers = [
-    "127.0.0.1:5000"
+    "127.0.0.1:5000",
+    "127.0.0.1:6000"
 ]
 # Dispatcher does not listen on any port, but we need to know its IP address.
 # This is because our workers only accept connections from known IP addresses,
