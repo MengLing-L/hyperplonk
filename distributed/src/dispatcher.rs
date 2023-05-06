@@ -4,8 +4,10 @@ use std::{
     convert::TryInto,
     io,
     iter::FromIterator,
+    marker::PhantomData,
     mem::size_of,
     net::SocketAddr,
+    sync::Arc,
 };
 
 use ark_bls12_381::{Bls12_381, Fq, Fr, G1Affine, G1Projective, G2Projective};
@@ -15,17 +17,27 @@ use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, format, rand::RngCore, start_timer};
 use fn_timer::fn_timer;
 use futures::future::join_all;
-use hyperplonk::prelude::HyperPlonkErrors;
+use hyperplonk::{
+    prelude::{CustomizedGates, HyperPlonkErrors},
+    structs::HyperPlonkParams,
+};
 use stubborn_io::StubbornTcpStream;
-use subroutines::{pcs::multilinear_kzg::{
-    srs::{self, Evaluations, MultilinearProverParam, MultilinearUniversalParams},
-    util,
-}, Commitment};
+use subroutines::{
+    pcs::multilinear_kzg::{
+        srs::{self, Evaluations, MultilinearProverParam, MultilinearUniversalParams},
+        util,
+    },
+    BatchProof, Commitment, MultilinearVerifierParam, PolynomialCommitmentScheme,
+    StructuredReferenceString,
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use transcript::IOPTranscript;
 
 use crate::{
+    config::CIRCUIT_CONFIG,
+    structs::HyperPlonkVerifyingKey,
     utils::CastSlice,
-    worker::{Method, Status}, config::{CIRCUIT_CONFIG},
+    worker::{Method, Status},
 };
 
 pub struct HyperPlonk {}
@@ -118,7 +130,9 @@ impl HyperPlonk {
         seed: [u8; 32],
         mut srs: MultilinearUniversalParams<Bls12_381>,
         // num_inputs: usize,
-    ) -> Result<(), HyperPlonkErrors> {
+    ) -> HyperPlonkVerifyingKey<Bls12_381> {
+        let (_, verifier_com_params) = srs.trim(CIRCUIT_CONFIG.custom_nv).unwrap();
+        //let (pcs_prover_param, pcs_verifier_param) = PCS::trim(pcs_srs, None, Some(CIRCUIT_CONFIG.custom_nv))?;
         join_all(workers.iter_mut().map(|worker| async move {
             worker.write_u8(Method::KeyGenPrepare as u8).await.unwrap();
             worker.flush().await.unwrap();
@@ -155,11 +169,11 @@ impl HyperPlonk {
 
             match worker.read_u8().await.unwrap().try_into().unwrap() {
                 Status::Ok => {
-                    let mut c_q =vec![G1Projective::zero(); CIRCUIT_CONFIG.selectors[i].len()];
+                    let mut c_q = vec![G1Projective::zero(); CIRCUIT_CONFIG.selectors[i].len()];
                     worker.read_exact(c_q.cast_mut()).await.unwrap();
-                    let mut c_p =vec![G1Projective::zero(); CIRCUIT_CONFIG.permu[i].len()];
+                    let mut c_p = vec![G1Projective::zero(); CIRCUIT_CONFIG.permu[i].len()];
                     worker.read_exact(c_p.cast_mut()).await.unwrap();
-                    (c_q,c_p)
+                    (c_q, c_p)
                 }
                 _ => panic!(),
             }
@@ -172,12 +186,95 @@ impl HyperPlonk {
         .into_iter()
         .map(|c| Commitment(c.into_affine()))
         .collect();
-        let permutation_comms: Vec<Commitment<Bls12_381>> = vec![
-            c[0].1[0], c[0].1[1], c[0].1[2], c[1].1[0], c[1].1[1],
-        ]
-        .into_iter()
-        .map(|c| Commitment(c.into_affine()))
-        .collect();
+        let permutation_comms: Vec<Commitment<Bls12_381>> =
+            vec![c[0].1[0], c[0].1[1], c[0].1[2], c[1].1[0], c[1].1[1]]
+                .into_iter()
+                .map(|c| Commitment(c.into_affine()))
+                .collect();
+        HyperPlonkVerifyingKey {
+            num_constraints: 1 << CIRCUIT_CONFIG.custom_nv,
+            num_pub_input: CIRCUIT_CONFIG.pub_input_len,
+            pcs_param: verifier_com_params,
+            selector_commitments: selector_comms,
+            perm_commitments: permutation_comms,
+        }
+    }
+
+    pub async fn prove_async(
+        workers: &mut [StubbornTcpStream<&'static SocketAddr>],
+        pub_inputs: &[Fr],
+        vk: &HyperPlonkVerifyingKey<Bls12_381>,
+    ) -> io::Result<()> {
+        let start = start_timer!(|| "hyperplonk proving");
+        let mut transcript = IOPTranscript::<Fr>::new(b"hyperplonk");
+
+        let wires_poly_comms = Self::commit_wit(workers, &mut transcript).await.unwrap();
+        println!("wires_poly_comms:");
+        for i in &wires_poly_comms {
+            println!("{}", i.0);
+        }
+        end_timer!(start);
         Ok(())
+    }
+
+    #[fn_timer]
+    async fn commit_wit(
+        workers: &mut [StubbornTcpStream<&'static SocketAddr>],
+        transcript: &mut IOPTranscript<Fr>,
+    ) -> Result<Vec<Commitment<Bls12_381>>, HyperPlonkErrors> {
+        let start = start_timer!(|| "Commit witness");
+        let c = join_all(workers.iter_mut().enumerate().map(|(i, worker)| async move {
+            worker.write_u8(Method::WitnessCommit as u8).await.unwrap();
+            worker.flush().await.unwrap();
+
+            match worker.read_u8().await.unwrap().try_into().unwrap() {
+                Status::Ok => {
+                    let mut c = vec![G1Projective::zero(); CIRCUIT_CONFIG.permu[i].len()];
+                    worker.read_exact(c.cast_mut()).await.unwrap();
+                    c
+                }
+                _ => panic!(),
+            }
+        }))
+        .await;
+        let wires_poly_comms: Vec<Commitment<Bls12_381>> =
+            vec![c[0][0], c[0][1], c[0][2], c[1][0], c[1][1]]
+                .into_iter()
+                .map(|c| Commitment(c.into_affine()))
+                .collect();
+        for w_com in wires_poly_comms.iter() {
+            transcript.append_serializable_element(b"w", w_com)?;
+        }
+        end_timer!(start);
+        Ok(wires_poly_comms)
+    }
+
+    #[fn_timer]
+    async fn build_f_hat(
+        workers: &mut [StubbornTcpStream<&'static SocketAddr>],
+        transcript: &mut IOPTranscript<Fr>,
+    ) -> Result<usize, HyperPlonkErrors> {
+        let start = start_timer!(|| "Build f_hat");
+        let r_tmp =
+            transcript.get_and_append_challenge_vectors(b"0check r", CIRCUIT_CONFIG.custom_nv)?;
+        let r = r_tmp.cast();
+        let hash = xxhash_rust::xxh3::xxh3_64(r);
+
+        let c = join_all(workers.iter_mut().enumerate().map(|(i, worker)| async move {
+            worker.write_u8(Method::BuidFhat as u8).await.unwrap();
+            worker.write_u64_le(hash).await.unwrap();
+            worker.write_u64_le(r.len() as u64).await.unwrap();
+            worker.write_all(r).await.unwrap();
+            worker.flush().await.unwrap();
+
+            match worker.read_u8().await.unwrap().try_into().unwrap() {
+                Status::Ok => {}
+                _ => panic!(),
+            }
+        }))
+        .await;
+
+        end_timer!(start);
+        Ok(1)
     }
 }

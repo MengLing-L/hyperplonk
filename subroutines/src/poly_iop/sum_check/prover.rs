@@ -86,7 +86,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             .flattened_ml_extensions
             .par_iter()
             .map(|x| x.as_ref().clone())
-            .collect();
+            .collect(); // worker
 
         if let Some(chal) = challenge {
             if self.round == 0 {

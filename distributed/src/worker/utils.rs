@@ -48,7 +48,7 @@ impl PlonkImplInner {
     #[inline]
     pub fn commit_polynomial(&self, poly: &[Fr]) -> G1Projective {
         let commit_timer = start_timer!(|| "commit");
-        
+
         let scalars: Vec<_> = poly.to_vec();
         let base = self.ck.mmap().unwrap();
         let commitment = G1Projective::msm_unchecked(&base, scalars.as_slice());

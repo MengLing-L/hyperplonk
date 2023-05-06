@@ -12,6 +12,8 @@ use hyperplonk::prelude::{
 };
 use rand::Rng;
 
+use crate::config::CIRCUIT_CONFIG;
+
 pub struct MockCircuit<F: PrimeField> {
     pub public_inputs: Vec<F>,
     pub witnesses: Vec<WitnessColumn<F>>,
@@ -86,7 +88,8 @@ impl<F: PrimeField> MockCircuit<F> {
                 witnesses[i].append(cur_witness[i]);
             }
         }
-        let pub_input_len = ark_std::cmp::min(4, num_constraints);
+        //let pub_input_len = ark_std::cmp::min(4, num_constraints);
+        let pub_input_len = CIRCUIT_CONFIG.pub_input_len;
         let public_inputs = witnesses[0].0[0..pub_input_len].to_vec();
 
         let params = HyperPlonkParams {

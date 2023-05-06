@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use arithmetic::VirtualPolynomial;
 use ark_bls12_381::Fr;
 use ark_ff::Zero;
 use ark_poly::EvaluationDomain;
@@ -27,8 +28,10 @@ use crate::{
     utils::CastSlice,
 };
 
+mod build_f_hat;
 mod keygen;
 mod utils;
+mod witness_commit;
 
 pub struct PlonkImplInner {
     me: usize,
@@ -53,6 +56,9 @@ pub struct PlonkImplInner {
     p_2: SliceStorage,
     p_3: SliceStorage,
     p_4: SliceStorage,
+
+    // f_hat: Mutex<VirtualPolynomial<Fr>>,
+    f_hat: VirtualPolynomial<Fr>,
 }
 
 #[repr(u8)]
@@ -61,6 +67,8 @@ pub enum Method {
     KeyGenPrepare = 0x00,
     KeyGenSetCk = 0x01,
     KeyGenCommit = 0x02,
+    WitnessCommit = 0x03,
+    BuidFhat = 0x04,
 }
 
 #[repr(u8)]
@@ -99,6 +107,7 @@ impl PlonkImplInner {
             p_2: SliceStorage::new(data_path.join("circuit.p_2.bin")),
             p_3: SliceStorage::new(data_path.join("circuit.p_3.bin")),
             p_4: SliceStorage::new(data_path.join("circuit.p_4.bin")),
+            f_hat: VirtualPolynomial::<Fr>::new(CIRCUIT_CONFIG.custom_nv),
             data_path,
         }
     }
@@ -115,6 +124,8 @@ impl PlonkImplInner {
             Method::KeyGenPrepare => self.keygen_prepare(req, res).await,
             Method::KeyGenSetCk => self.keygen_set_ck(req, res).await,
             Method::KeyGenCommit => self.keygen_commit(req, res).await,
+            Method::WitnessCommit => self.witness_commit(req, res).await,
+            Method::BuidFhat => self.build_f_hat(req, res).await,
         }
     }
 
@@ -165,7 +176,40 @@ impl PlonkImplInner {
 
         res.write_u8(Status::Ok as u8).await?;
         res.write_all(self.init_and_commit_selectors(circuit.index.selectors).cast()).await?;
-        res.write_all([self.init_and_commit_permu(circuit.index.permutation)].cast()).await?;
+        res.write_all(self.init_and_commit_permu(circuit.index.permutation).cast()).await?;
+        res.flush().await?;
+
+        Ok(())
+    }
+
+    async fn witness_commit<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
+        &self,
+        mut req: BufReader<R>,
+        mut res: BufWriter<W>,
+    ) -> io::Result<()> {
+        res.write_u8(Status::Ok as u8).await?;
+        res.write_all(self.init_and_commit_w().cast()).await?;
+        res.flush().await?;
+
+        Ok(())
+    }
+
+    async fn build_f_hat<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
+        &self,
+        mut req: BufReader<R>,
+        mut res: BufWriter<W>,
+    ) -> io::Result<()> {
+        let hash = req.read_u64_le().await?;
+        let length = req.read_u64_le().await?;
+        let mut r_buf = vec![0u8; length as usize];
+        req.read_exact(&mut r_buf).await?;
+        if xxhash_rust::xxh3::xxh3_64(&r_buf) != hash {
+            res.write_u8(Status::HashMismatch as u8).await?;
+        } else {
+            let r = r_buf.cast::<Fr>();
+            CIRCUIT_CONFIG.custom_nv;
+            res.write_u8(Status::Ok as u8).await?;
+        }
         res.flush().await?;
 
         Ok(())

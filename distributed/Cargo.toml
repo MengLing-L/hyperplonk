@@ -11,6 +11,10 @@ path = "bin/worker.rs"
 name = "keygen_dispatcher"
 path = "bin/keygen_dispatcher.rs"
 
+[[bin]]
+name = "prove_dispatcher"
+path = "bin/prove_dispatcher.rs"
+
 
 [dependencies]
 futures = "0.3.0"
@@ -41,6 +45,7 @@ subroutines = { path = "../subroutines" }
 hyperplonk = {path="../hyperplonk"}
 arithmetic = { path = "../arithmetic" }
 displaydoc = { version = "0.2.3", default-features = false }
+transcript = { path = "../transcript" }
 
 [features]
 default = ["trace"]

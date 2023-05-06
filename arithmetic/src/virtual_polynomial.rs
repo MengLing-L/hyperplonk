@@ -91,6 +91,9 @@ impl<F: PrimeField> Add for &VirtualPolynomial<F> {
     }
 }
 
+unsafe impl<F: PrimeField> Send for VirtualPolynomial<F> {}
+unsafe impl<F: PrimeField> Sync for VirtualPolynomial<F> {}
+
 // TODO: convert this into a trait
 impl<F: PrimeField> VirtualPolynomial<F> {
     /// Creates an empty virtual polynomial with `num_variables`.

@@ -11,4 +11,5 @@ pub mod dispatcher;
 pub mod mmap;
 pub mod mock;
 pub mod storage;
+pub mod structs;
 pub mod worker;
