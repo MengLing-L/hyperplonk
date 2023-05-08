@@ -1,5 +1,5 @@
 use std::{
-    cmp::{max, min},
+    cmp::{self, max, min},
     collections::LinkedList,
     convert::TryInto,
     io,
@@ -10,6 +10,7 @@ use std::{
     sync::Arc,
 };
 
+use arithmetic::VPAuxInfo;
 use ark_bls12_381::{Bls12_381, Fq, Fr, G1Affine, G1Projective, G2Projective};
 use ark_ec::{scalar_mul::fixed_base::FixedBase, CurveGroup};
 use ark_ff::{BigInteger, Field, One, PrimeField, UniformRand, Zero};
@@ -27,7 +28,7 @@ use subroutines::{
         srs::{self, Evaluations, MultilinearProverParam, MultilinearUniversalParams},
         util,
     },
-    BatchProof, Commitment, MultilinearVerifierParam, PolynomialCommitmentScheme,
+    BatchProof, Commitment, IOPProof, MultilinearVerifierParam, PolynomialCommitmentScheme,
     StructuredReferenceString,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -187,7 +188,7 @@ impl HyperPlonk {
         .map(|c| Commitment(c.into_affine()))
         .collect();
         let permutation_comms: Vec<Commitment<Bls12_381>> =
-            vec![c[0].1[0], c[0].1[1], c[0].1[2], c[1].1[0], c[1].1[1]]
+            vec![c[0].1[0], c[0].1[1], c[1].1[0], c[1].1[1], c[1].1[2]]
                 .into_iter()
                 .map(|c| Commitment(c.into_affine()))
                 .collect();
@@ -213,6 +214,8 @@ impl HyperPlonk {
         for i in &wires_poly_comms {
             println!("{}", i.0);
         }
+        let max_degree = Self::build_f_hat(workers, &mut transcript).await.unwrap();
+        println!("{}", max_degree);
         end_timer!(start);
         Ok(())
     }
@@ -238,7 +241,7 @@ impl HyperPlonk {
         }))
         .await;
         let wires_poly_comms: Vec<Commitment<Bls12_381>> =
-            vec![c[0][0], c[0][1], c[0][2], c[1][0], c[1][1]]
+            vec![c[0][0], c[0][1], c[1][0], c[1][1], c[1][2]]
                 .into_iter()
                 .map(|c| Commitment(c.into_affine()))
                 .collect();
@@ -260,11 +263,50 @@ impl HyperPlonk {
         let r = r_tmp.cast();
         let hash = xxhash_rust::xxh3::xxh3_64(r);
 
-        let c = join_all(workers.iter_mut().enumerate().map(|(i, worker)| async move {
+        let degrees = join_all(workers.iter_mut().enumerate().map(|(i, worker)| async move {
             worker.write_u8(Method::BuidFhat as u8).await.unwrap();
             worker.write_u64_le(hash).await.unwrap();
             worker.write_u64_le(r.len() as u64).await.unwrap();
             worker.write_all(r).await.unwrap();
+            worker.flush().await.unwrap();
+
+            match worker.read_u8().await.unwrap().try_into().unwrap() {
+                Status::Ok => {
+                    let degree = worker.read_u64_le().await.unwrap();
+                    degree
+                }
+                _ => panic!(),
+            }
+        }))
+        .await;
+        let aux_info: VPAuxInfo<Fr> = VPAuxInfo {
+            // The max degree is the max degree of any individual variable
+            max_degree: max(degrees[0] as usize, degrees[1] as usize),
+            num_variables: CIRCUIT_CONFIG.custom_nv,
+            phantom: PhantomData::default(),
+        };
+        transcript.append_serializable_element(b"aux info", &aux_info)?;
+
+        end_timer!(start);
+        Ok(max(degrees[0] as usize, degrees[1] as usize))
+    }
+
+    #[fn_timer]
+    async fn zero_check(
+        workers: &mut [StubbornTcpStream<&'static SocketAddr>],
+        transcript: &mut IOPTranscript<Fr>,
+        max_degree: usize,
+    ) -> Result<IOPProof<Fr>, HyperPlonkErrors> {
+        let start = start_timer!(|| "Zero check");
+        let mut challenges: Vec<Option<Fr>> = vec![Some(Fr::one()); CIRCUIT_CONFIG.custom_nv - 1];
+        for i in 0..CIRCUIT_CONFIG.custom_nv {
+            let challenge = Some(transcript.get_and_append_challenge(b"Internal round")?);
+            challenges[i] = challenge;
+        }
+        let product_max = join_all(workers.iter_mut().enumerate().map(|(i, worker)| async move {
+            worker.write_u8(Method::ZeroCheck as u8).await.unwrap();
+            worker.write_u64_le(max_degree as u64).await.unwrap();
+            worker.write_all(challenges.cast()).await.unwrap();
             worker.flush().await.unwrap();
 
             match worker.read_u8().await.unwrap().try_into().unwrap() {
@@ -275,6 +317,6 @@ impl HyperPlonk {
         .await;
 
         end_timer!(start);
-        Ok(1)
+        Ok(IOPProof {})
     }
 }

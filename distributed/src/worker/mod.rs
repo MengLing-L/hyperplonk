@@ -7,10 +7,15 @@ use arithmetic::VirtualPolynomial;
 use ark_bls12_381::Fr;
 use ark_ff::Zero;
 use ark_poly::EvaluationDomain;
+use ark_std::One;
 use futures::future::join_all;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use stubborn_io::StubbornTcpStream;
+use subroutines::{
+    pcs,
+    poly_iop::{structs::IOPProverState, sum_check::SumCheckProver},
+};
 use tokio::{
     io,
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, BufWriter},
@@ -27,11 +32,11 @@ use crate::{
     timer,
     utils::CastSlice,
 };
-
 mod build_f_hat;
 mod keygen;
 mod utils;
 mod witness_commit;
+mod zero_check;
 
 pub struct PlonkImplInner {
     me: usize,
@@ -69,6 +74,7 @@ pub enum Method {
     KeyGenCommit = 0x02,
     WitnessCommit = 0x03,
     BuidFhat = 0x04,
+    ZeroCheck = 0x05,
 }
 
 #[repr(u8)]
@@ -126,6 +132,7 @@ impl PlonkImplInner {
             Method::KeyGenCommit => self.keygen_commit(req, res).await,
             Method::WitnessCommit => self.witness_commit(req, res).await,
             Method::BuidFhat => self.build_f_hat(req, res).await,
+            Method::ZeroCheck => self.zero_check(req, res).await,
         }
     }
 
@@ -207,9 +214,37 @@ impl PlonkImplInner {
             res.write_u8(Status::HashMismatch as u8).await?;
         } else {
             let r = r_buf.cast::<Fr>();
-            CIRCUIT_CONFIG.custom_nv;
             res.write_u8(Status::Ok as u8).await?;
+            res.write_u64_le(self.build_f_hat_exact(r, CIRCUIT_CONFIG.custom_nv)).await?;
         }
+        res.flush().await?;
+
+        Ok(())
+    }
+
+    async fn zero_check<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
+        &self,
+        mut req: BufReader<R>,
+        mut res: BufWriter<W>,
+    ) -> io::Result<()> {
+        let max_degree = req.read_u64_le().await? as usize;
+        let mut challenges: Vec<Option<Fr>> = vec![Some(Fr::one()); CIRCUIT_CONFIG.custom_nv - 1];
+        req.read_exact(challenges.cast_mut()).await.unwrap();
+
+        let mut prover_state = IOPProverState::<Fr>::prover_init(&self.f_hat).unwrap();
+        prover_state.poly.aux_info.max_degree = max_degree;
+
+        let mut prover_msgs = Vec::with_capacity(prover_state.poly.aux_info.num_variables);
+
+        for i in 0..CIRCUIT_CONFIG.custom_nv {
+            let prover_msg =
+                self.zero_check_exact(CIRCUIT_CONFIG.custom_nv, &mut prover_state, &challenges);
+            prover_msgs.push(prover_msg);
+        }
+
+        res.write_u8(Status::Ok as u8).await?;
+        res.write_all(prover_msgs.cast()).await?;
+
         res.flush().await?;
 
         Ok(())

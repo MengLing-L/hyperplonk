@@ -225,7 +225,7 @@ fn barycentric_weights<F: PrimeField>(points: &[F]) -> Vec<F> {
     weights
 }
 
-fn extrapolate<F: PrimeField>(points: &[F], weights: &[F], evals: &[F], at: &F) -> F {
+pub fn extrapolate<F: PrimeField>(points: &[F], weights: &[F], evals: &[F], at: &F) -> F {
     let (coeffs, sum_inv) = {
         let mut coeffs = points.iter().map(|point| *at - point).collect::<Vec<_>>();
         batch_inversion(&mut coeffs);

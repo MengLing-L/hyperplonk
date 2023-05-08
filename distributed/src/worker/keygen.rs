@@ -74,14 +74,16 @@ impl PlonkImplInner {
                 let p_1_c = self.commit_polynomial(&permuations[1]);
                 self.p_2.store(&permuations[2]);
                 let p_2_c = self.commit_polynomial(&permuations[2]);
-                vec![p_0_c, p_1_c, p_2_c]
+                vec![p_0_c, p_1_c]
             }
             1 => {
+                self.p_2.store(&permuations[2]);
+                let p_2_c = self.commit_polynomial(&permuations[2]);
                 self.p_3.store(&permuations[3]);
                 let p_3_c = self.commit_polynomial(&permuations[3]);
                 self.p_4.store(&permuations[4]);
                 let p_4_c = self.commit_polynomial(&permuations[4]);
-                vec![p_3_c, p_4_c]
+                vec![p_2_c, p_3_c, p_4_c]
             }
             _ => unreachable!(),
         }

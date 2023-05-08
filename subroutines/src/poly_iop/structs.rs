@@ -32,12 +32,12 @@ pub struct IOPProverState<F: PrimeField> {
     /// sampled randomness given by the verifier
     pub challenges: Vec<F>,
     /// the current round number
-    pub(crate) round: usize,
+    pub round: usize,
     /// pointer to the virtual polynomial
-    pub(crate) poly: VirtualPolynomial<F>,
+    pub poly: VirtualPolynomial<F>,
     /// points with precomputed barycentric weights for extrapolating smaller
     /// degree uni-polys to `max_degree + 1` evaluations.
-    pub(crate) extrapolation_aux: Vec<(Vec<F>, Vec<F>)>,
+    pub extrapolation_aux: Vec<(Vec<F>, Vec<F>)>,
 }
 
 /// Prover State of a PolyIOP
