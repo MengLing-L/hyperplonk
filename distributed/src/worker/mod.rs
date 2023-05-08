@@ -238,7 +238,7 @@ impl PlonkImplInner {
 
         for i in 0..CIRCUIT_CONFIG.custom_nv {
             let prover_msg =
-                self.zero_check_exact(CIRCUIT_CONFIG.custom_nv, &mut prover_state, &challenges);
+                self.sum_check(CIRCUIT_CONFIG.custom_nv, &mut prover_state, &challenges);
             prover_msgs.push(prover_msg);
         }
 

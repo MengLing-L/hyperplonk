@@ -9,7 +9,7 @@ use std::{
     net::SocketAddr,
     sync::Arc,
 };
-
+use subroutines::poly_iop::structs::IOPProverMessage;
 use arithmetic::VPAuxInfo;
 use ark_bls12_381::{Bls12_381, Fq, Fr, G1Affine, G1Projective, G2Projective};
 use ark_ec::{scalar_mul::fixed_base::FixedBase, CurveGroup};
@@ -303,20 +303,35 @@ impl HyperPlonk {
             let challenge = Some(transcript.get_and_append_challenge(b"Internal round")?);
             challenges[i] = challenge;
         }
-        let product_max = join_all(workers.iter_mut().enumerate().map(|(i, worker)| async move {
+        let product_sums = join_all(workers.iter_mut().enumerate().map(|(i, worker)| async move {
             worker.write_u8(Method::ZeroCheck as u8).await.unwrap();
             worker.write_u64_le(max_degree as u64).await.unwrap();
             worker.write_all(challenges.cast()).await.unwrap();
             worker.flush().await.unwrap();
 
             match worker.read_u8().await.unwrap().try_into().unwrap() {
-                Status::Ok => {}
+                Status::Ok => {
+                    let mut products_sum =
+                        vec![vec![Fr::zero(); max_degree + 1]; CIRCUIT_CONFIG.custom_nv];
+                    worker.read_exact(products_sum.cast_mut()).await.unwrap();
+                    products_sum
+                }
                 _ => panic!(),
             }
         }))
         .await;
 
+        // product_sums[0]
+        //     .iter_mut()
+        //     .zip(product_sums[1])
+        //     .for_each(|(products_sum, sum)| ));
+
         end_timer!(start);
-        Ok(IOPProof {})
+        // Ok(IOPProof {
+        //     point: challenges,
+        //     proofs: IOPProverMessage {
+        //         evaluations: product_sums[0][CIRCUIT_CONFIG.custom_nv - 1],
+        //     },
+        // })
     }
 }

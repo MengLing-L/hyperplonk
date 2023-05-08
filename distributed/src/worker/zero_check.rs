@@ -21,7 +21,7 @@ use crate::config::CIRCUIT_CONFIG;
 
 impl PlonkImplInner {
     #[fn_timer]
-    pub fn zero_check_exact(
+    pub fn sum_check(
         &self,
         num_vars: usize,
         state: &mut IOPProverState<Fr>,
