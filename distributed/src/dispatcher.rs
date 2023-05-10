@@ -145,7 +145,7 @@ impl HyperPlonk {
         }))
         .await;
 
-        for chunk in srs.prover_param.powers_of_g.cast::<u8>().chunks(1 << 30) {
+        for chunk in srs.prover_param.get_power_g().cast::<u8>().chunks(1 << 30) {
             join_all(workers.iter_mut().map(|worker| async move {
                 loop {
                     worker.write_u8(Method::KeyGenSetCk as u8).await.unwrap();
@@ -185,12 +185,12 @@ impl HyperPlonk {
             c[1].0[3], c[1].0[4], c[0].0[5], c[1].0[5],
         ]
         .into_iter()
-        .map(|c| Commitment(c.into_affine()))
+        .map(|tmp| Commitment(tmp.into()))
         .collect();
         let permutation_comms: Vec<Commitment<Bls12_381>> =
             vec![c[0].1[0], c[0].1[1], c[1].1[0], c[1].1[1], c[1].1[2]]
                 .into_iter()
-                .map(|c| Commitment(c.into_affine()))
+                .map(|tmp| Commitment(tmp.into_affine()))
                 .collect();
         HyperPlonkVerifyingKey {
             num_constraints: 1 << CIRCUIT_CONFIG.custom_nv,
@@ -204,7 +204,7 @@ impl HyperPlonk {
     pub async fn prove_async(
         workers: &mut [StubbornTcpStream<&'static SocketAddr>],
         pub_inputs: &[Fr],
-        vk: &HyperPlonkVerifyingKey<Bls12_381>,
+        // vk: &HyperPlonkVerifyingKey<Bls12_381>,
     ) -> io::Result<()> {
         let start = start_timer!(|| "hyperplonk proving");
         let mut transcript = IOPTranscript::<Fr>::new(b"hyperplonk");
@@ -216,6 +216,7 @@ impl HyperPlonk {
         }
         let max_degree = Self::build_f_hat(workers, &mut transcript).await.unwrap();
         println!("{}", max_degree);
+        Self::zero_check(workers, &mut transcript, max_degree).await.unwrap();
         end_timer!(start);
         Ok(())
     }
@@ -258,8 +259,7 @@ impl HyperPlonk {
         transcript: &mut IOPTranscript<Fr>,
     ) -> Result<usize, HyperPlonkErrors> {
         let start = start_timer!(|| "Build f_hat");
-        let r_tmp =
-            transcript.get_and_append_challenge_vectors(b"0check r", CIRCUIT_CONFIG.custom_nv)?;
+        let r_tmp = transcript.get_and_append_challenge_vectors(b"0check r", CIRCUIT_CONFIG.custom_nv)?;
         let r = r_tmp.cast();
         let hash = xxhash_rust::xxh3::xxh3_64(r);
 
@@ -296,23 +296,28 @@ impl HyperPlonk {
         workers: &mut [StubbornTcpStream<&'static SocketAddr>],
         transcript: &mut IOPTranscript<Fr>,
         max_degree: usize,
-    ) -> Result<IOPProof<Fr>, HyperPlonkErrors> {
+    // ) -> Result<IOPProof<Fr>, HyperPlonkErrors> {
+    ) -> Result<usize, HyperPlonkErrors> {
         let start = start_timer!(|| "Zero check");
-        let mut challenges: Vec<Option<Fr>> = vec![Some(Fr::one()); CIRCUIT_CONFIG.custom_nv - 1];
-        for i in 0..CIRCUIT_CONFIG.custom_nv {
-            let challenge = Some(transcript.get_and_append_challenge(b"Internal round")?);
-            challenges[i] = challenge;
+        let mut challenges_tmp: Vec<Fr> = vec![Fr::one(); CIRCUIT_CONFIG.custom_nv - 1];
+        for i in 0..(CIRCUIT_CONFIG.custom_nv - 1) {
+            let challenge = transcript.get_and_append_challenge(b"Internal round")?;
+            challenges_tmp[i] = challenge;
         }
+        let challenges = challenges_tmp.cast();
+        let hash = xxhash_rust::xxh3::xxh3_64(challenges);
         let product_sums = join_all(workers.iter_mut().enumerate().map(|(i, worker)| async move {
             worker.write_u8(Method::ZeroCheck as u8).await.unwrap();
             worker.write_u64_le(max_degree as u64).await.unwrap();
-            worker.write_all(challenges.cast()).await.unwrap();
+            worker.write_u64_le(hash).await.unwrap();
+            worker.write_u64_le(challenges.len() as u64).await.unwrap();
+            worker.write_all(challenges).await.unwrap();
             worker.flush().await.unwrap();
 
             match worker.read_u8().await.unwrap().try_into().unwrap() {
                 Status::Ok => {
                     let mut products_sum =
-                        vec![vec![Fr::zero(); max_degree + 1]; CIRCUIT_CONFIG.custom_nv];
+                        vec![Fr::zero(); CIRCUIT_CONFIG.custom_nv * (max_degree + 1)];
                     worker.read_exact(products_sum.cast_mut()).await.unwrap();
                     products_sum
                 }
@@ -320,6 +325,7 @@ impl HyperPlonk {
             }
         }))
         .await;
+        println!("{:?}", product_sums);
 
         // product_sums[0]
         //     .iter_mut()
@@ -333,5 +339,6 @@ impl HyperPlonk {
         //         evaluations: product_sums[0][CIRCUIT_CONFIG.custom_nv - 1],
         //     },
         // })
+        Ok(3)
     }
 }

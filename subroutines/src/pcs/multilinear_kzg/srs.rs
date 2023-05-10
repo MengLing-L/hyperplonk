@@ -51,6 +51,14 @@ pub struct MultilinearProverParam<E: Pairing> {
     pub h: E::G2Affine,
 }
 
+impl<E: Pairing> MultilinearProverParam<E> {
+    /// Number of variables in a multilinear system
+    pub fn get_power_g(&self) -> Vec<E::G1Affine> {
+        self.powers_of_g[0].clone().evals
+    }
+
+}
+
 /// Verifier Parameters
 #[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
 pub struct MultilinearVerifierParam<E: Pairing> {

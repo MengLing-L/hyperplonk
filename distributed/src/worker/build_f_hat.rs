@@ -12,14 +12,14 @@ use crate::config::CIRCUIT_CONFIG;
 
 impl PlonkImplInner {
     #[fn_timer]
-    pub fn build_f<F: PrimeField>(
+    pub fn build_f(
         &self,
         //gates: &CustomizedGates,
         num_vars: usize,
-        selector_mles: &[Arc<DenseMultilinearExtension<F>>],
-        witness_mles: &[Arc<DenseMultilinearExtension<F>>],
-        r: &[F],
-    ) -> Result<VirtualPolynomial<F>, HyperPlonkErrors> {
+        selector_mles: &[Arc<DenseMultilinearExtension<Fr>>],
+        witness_mles: &[Arc<DenseMultilinearExtension<Fr>>],
+        r: &[Fr],
+    ) {
         // TODO: check that selector and witness lengths match what is in
         // the gate definition
 
@@ -43,11 +43,12 @@ impl PlonkImplInner {
         //     }
         // }
 
-        let mut res = VirtualPolynomial::<F>::new(num_vars);
+        //let mut res = VirtualPolynomial::<Fr>::new(num_vars);
+        let this = unsafe { &mut *(self as *const _ as *mut Self) };
 
         for (coeff, selector, witnesses) in gates.gates.iter() {
             let coeff_fr =
-                if *coeff < 0 { -F::from(-*coeff as u64) } else { F::from(*coeff as u64) };
+                if *coeff < 0 { -Fr::from(-*coeff as u64) } else { Fr::from(*coeff as u64) };
             let mut mle_list = vec![];
             if let Some(s) = *selector {
                 if CIRCUIT_CONFIG.selectors[self.me].contains(&s) {
@@ -60,13 +61,14 @@ impl PlonkImplInner {
                 }
             }
             if !mle_list.is_empty() {
-                res.add_mle_list(mle_list, coeff_fr)?;
+                this.f_hat.add_mle_list(mle_list, coeff_fr).unwrap();
             }
         }
         let eq_x_r = build_eq_x_r(r).unwrap();
-        res.mul_by_mle(eq_x_r, F::one())?;
+        this.f_hat.mul_by_mle(eq_x_r, Fr::one()).unwrap();
+        print!("{:?}",this.f_hat.aux_info.max_degree);
 
-        Ok(res)
+        // Ok(res)
     }
 
     #[fn_timer]
@@ -88,7 +90,8 @@ impl PlonkImplInner {
                 Arc::new(DenseMultilinearExtension::from_evaluations_slice(var, w))
             })
             .collect();
-        this.f_hat = self.build_f(num_vars, &selector_oracles, &witness_polys, r.as_ref()).unwrap();
+        self.build_f(num_vars, &selector_oracles, &witness_polys, r.as_ref());
+        print!("{:?}",this.f_hat.aux_info.max_degree);
         this.f_hat.aux_info.max_degree as u64
     }
 

@@ -214,6 +214,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         // increase the max degree by one as the MLE has degree 1.
         self.aux_info.max_degree += 1;
+        
         end_timer!(start);
         Ok(())
     }

@@ -13,9 +13,8 @@ use stubborn_io::StubbornTcpStream;
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let vk = HyperPlonkVerifyingKey::<Bls12_381>::deserialize_uncompressed(File::open(
-        DATA_DIR.join("dispatcher/vk.bin"),
-    )?)?;
+    let mut f = File::open(DATA_DIR.join("dispatcher/vk.bin")).unwrap();
+    let vk = HyperPlonkVerifyingKey::<Bls12_381>::deserialize_uncompressed_unchecked(& mut f)?;
     let public_inputs: Vec<Fr> =
         SliceStorage::new(DATA_DIR.join("dispatcher/circuit.inputs.bin")).load()?;
 
@@ -25,7 +24,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         stream
     }))
     .await;
-    HyperPlonk::prove_async(&mut workers, &public_inputs, &vk).await;
+    HyperPlonk::prove_async(&mut workers, &public_inputs).await;
     // for i in 0..10 {
     //     let now = Instant::now();
     //     let proof = Plonk::prove_async(&mut workers, &public_inputs, &vk).await.unwrap();

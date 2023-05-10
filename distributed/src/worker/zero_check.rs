@@ -23,9 +23,8 @@ impl PlonkImplInner {
     #[fn_timer]
     pub fn sum_check(
         &self,
-        num_vars: usize,
         state: &mut IOPProverState<Fr>,
-        challenges: &[Option<Fr>],
+        challenges: &[Fr],
     ) -> Vec<Fr> {
         // if state.round >= state.poly.aux_info.num_variables {
         //     return Err(hyperplonk::prelude::HyperPlonkErrors::PolyIOPErrors(PolyIOPErrors::InvalidProver(
@@ -56,7 +55,7 @@ impl PlonkImplInner {
         // }
 
         if state.round != 0 {
-            let r = state.challenges[state.round - 1];
+            let r = challenges[state.round - 1];
             #[cfg(feature = "parallel")]
             flattened_ml_extensions.par_iter_mut().for_each(|mle| *mle = fix_variables(mle, &[r]));
             #[cfg(not(feature = "parallel"))]

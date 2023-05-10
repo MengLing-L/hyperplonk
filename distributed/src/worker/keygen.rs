@@ -42,7 +42,7 @@ impl PlonkImplInner {
         let selectors = CIRCUIT_CONFIG.selectors[me]
             .par_iter()
             .map(|&var| selector[var].0.to_vec())
-            .collect::<Vec<_>>();
+            .collect::<Vec<Vec<Fr>>>();
         let q_0_c = self.commit_polynomial(&selectors[0]);
         self.q_0.store(&selectors[0]).unwrap();
         let q_1_c = self.commit_polynomial(&selectors[1]);

@@ -58,6 +58,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", i.0);
     }
 
-    vk.serialize_uncompressed(File::create(DATA_DIR.join("dispatcher/vk.bin"))?)?;
+    // vk.serialize_compressed(File::create(DATA_DIR.join("dispatcher/vk.bin")).unwrap())?;
+    let mut f = File::create(DATA_DIR.join("dispatcher/vk.bin")).unwrap();
+    vk.serialize_uncompressed(&mut f).unwrap();
     Ok(())
 }
